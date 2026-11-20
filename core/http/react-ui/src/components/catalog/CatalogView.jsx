@@ -7,7 +7,7 @@ import { Callout } from '../ui'
 import CatalogSearchBox from './CatalogSearchBox'
 import CatalogPager from './CatalogPager'
 import CatalogEmpty from './CatalogEmpty'
-import { PAGE_SIZE, normalizeQuery, queryKey, searchableSources, totalPages } from './catalogState'
+import { PAGE_SIZE, liveSourceId, normalizeQuery, queryKey, searchableSources, totalPages } from './catalogState'
 import './catalog.css'
 
 // A searchable, paged listing over a resource adapter. It knows nothing about
@@ -53,10 +53,17 @@ export default function CatalogView({ adapter, query, onQueryChange, renderEntry
     if (!adapter.listSources) return undefined
     const ctl = new AbortController()
     adapter.listSources(ctl.signal)
-      .then(list => setSources(searchableSources(list)))
+      .then(list => {
+        const next = searchableSources(list)
+        setSources(next)
+        // A stale source filter in the URL must not strand the page on an
+        // empty result nobody can clear when the library chips are hidden.
+        const wanted = liveSourceId(queryRef.current.sourceId, next)
+        if (wanted !== queryRef.current.sourceId) onQueryChange({ ...queryRef.current, sourceId: wanted, page: 1 })
+      })
       .catch(() => { if (!ctl.signal.aborted) setSources([]) })
     return () => ctl.abort()
-  }, [adapter, reloadToken])
+  }, [adapter, reloadToken, onQueryChange])
 
   useEffect(() => {
     const ctl = new AbortController()
