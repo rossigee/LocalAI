@@ -215,10 +215,17 @@ export function sourceKind(source) {
   return SOURCE_KINDS.includes(source?.kind) ? source.kind : 'addon'
 }
 
-// The sources the add-on catalog searches: on, not removed, and in the library
-// shape. Model sources and gallery-format sources are read by the galleries.
+// The sources the add-on catalog searches: on, not removed, in the library
+// shape, and of the add-on kind. Backend and model sources are read by their
+// own pages; neither can answer an add-on search.
 export function searchableSources(list = []) {
-  return list.filter(s => s.enabled && !s.removed && !s.suspended && sourceKind(s) !== 'model' && s.format !== 'gallery')
+  return list.filter(s => s.enabled && !s.removed && !s.suspended && sourceKind(s) === 'addon' && s.format !== 'gallery')
+}
+
+// A source filter outlives the list it came from in the URL. Keep it only when
+// the add-on catalog still offers that source.
+export function liveSourceId(sourceId, sources = []) {
+  return sourceId && sources.some(s => s.id === sourceId) ? sourceId : ''
 }
 
 // The list the Libraries tab shows for one kind filter ('all' shows every
