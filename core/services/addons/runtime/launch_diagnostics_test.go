@@ -123,7 +123,15 @@ var _ = Describe("The cause of a failed launch", func() {
 		Expect(cause).To(ContainSubstring(`last output: "warming up"`))
 	})
 	It("names a process whose health answer does not repeat the registration", func() {
-		cause := causeOf(launcher(), fixture("forged", service))
+		s := launcher()
+		// The forged process must start and answer before the readiness
+		// timeout ends. Unlike the scripts, it is a new executable: macOS takes
+		// seconds to admit it, and a loaded Linux runner can take more than the
+		// 1.5 s of the script specs (startBudget is only 300 ms there). The
+		// spec ends at the first rejected answer, so a long timeout costs
+		// nothing when the process starts at once.
+		s.config.ReadyTimeout = max(s.config.ReadyTimeout, startBudget, 15*time.Second)
+		cause := causeOf(s, fixture("forged", service))
 		Expect(cause).To(ContainSubstring(StageRegistrationRejected + ": the health answer does not repeat the registration"))
 	})
 	It("names a start that is refused before a process is made", func() {
