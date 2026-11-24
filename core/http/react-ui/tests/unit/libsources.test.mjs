@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SOURCE_KINDS, canRefresh, countByKind, draftToLibrarySource, filterSources, searchableSources,
+  SOURCE_KINDS, canRefresh, countByKind, draftToLibrarySource, filterSources, liveSourceId, searchableSources,
   sourceKind, sourceState, mirrorList, mirrorsValid, sourceToDraft, validateSourceDraft,
 } from '../../src/components/catalog/catalogState.js'
 import { createAddonsApi, createAddonsCatalogAdapter, AddonsError, classifyLibrary } from '../../src/utils/addonsApi.js'
@@ -42,12 +42,21 @@ test('a source shows one state: removed, suspended, disabled or enabled', () => 
   assert.equal(sourceState({ removed: true, suspended: true }), 'removed')
 })
 
-test('only enabled library-format sources are searched and refreshed', () => {
+test('only enabled add-on library sources are searched and refreshed', () => {
   assert.deepEqual(searchableSources(SOURCES).map(s => s.id), ['official', 'legacy'])
   assert.equal(canRefresh(SOURCES[0]), true)
   assert.equal(canRefresh(SOURCES[1]), false, 'a disabled source is not refreshed')
   assert.equal(canRefresh(SOURCES[2]), false, 'a gallery index is read by the gallery readers')
   assert.equal(canRefresh(SOURCES[4]), false)
+
+  // A backend library can be library-format, not only a gallery. It still
+  // cannot answer an add-on search, so it is never offered as a filter.
+  const libraries = [...SOURCES, { kind: 'backend', id: 'official-backends', name: 'Official backend library', enabled: true }]
+  const shown = searchableSources(libraries)
+  assert.deepEqual(shown.map(s => s.id), ['official', 'legacy'])
+  assert.equal(liveSourceId('official', shown), 'official')
+  assert.equal(liveSourceId('official-backends', shown), '', 'a stale backend filter is cleared')
+  assert.equal(liveSourceId('legacy', shown), 'legacy')
 })
 
 test('a backend or model source is added with its kind and format, an add-on keeps its own form', () => {
