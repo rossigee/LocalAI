@@ -87,7 +87,7 @@ jobs:
           mkdir -p core/http/react-ui/dist
           touch core/http/react-ui/dist/index.html
       - name: lint
-        run: make lint
+        run: make lint LINT_NEW_FROM=origin/${{ github.base_ref || 'master' }}
 
   build-scripts:
     # The image packaging scripts encode invariants that only surface inside a
