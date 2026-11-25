@@ -25,3 +25,6 @@ branches:
   - name: fix/addon-library-sources
     description: "Show only add-on libraries in Find add-ons; clear a stale source filter."
     upstream_pr: null
+  - name: feat/oidc-groups-project-access
+    description: "OIDC groups claim + project group access via workspace grants."
+    upstream_pr: null
