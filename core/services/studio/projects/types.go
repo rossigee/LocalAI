@@ -28,6 +28,17 @@ type Defaults struct {
 	Collections []string `json:"collections,omitempty"`
 }
 
+// AccessGrant gives a named principal group access to the project.
+type AccessGrant struct {
+	Name string `json:"name"`
+	Mode string `json:"mode,omitempty"` // "read" or "write"; empty means read
+}
+
+// Access declares who else may access the project.
+type Access struct {
+	Groups []AccessGrant `json:"groups,omitempty"`
+}
+
 // Manifest is the content of ManifestFile.
 type Manifest struct {
 	Version     int      `json:"version"`
@@ -39,6 +50,8 @@ type Manifest struct {
 	// chat and agent of the project gets them on each turn. Defaults remain the
 	// limit. A manifest from before this field reads as nothing attached.
 	Attached Defaults `json:"attached,omitzero"`
+	// Access declares group/user access grants reconciled to workspace grants.
+	Access Access `json:"access,omitzero"`
 	// SharedWith is reserved. A manifest that has it still parses, but the
 	// list is dropped on read and never written: sharing is a workspace grant.
 	SharedWith []string `json:"sharedWith,omitempty"`

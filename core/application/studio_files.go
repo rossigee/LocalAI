@@ -10,6 +10,7 @@ import (
 
 	"github.com/mudler/xlog"
 
+	"github.com/mudler/LocalAI/core/http/auth"
 	"github.com/mudler/LocalAI/core/services/addons"
 	"github.com/mudler/LocalAI/core/services/addons/packages"
 	"github.com/mudler/LocalAI/core/services/storage"
@@ -114,7 +115,21 @@ func (a *Application) initStudioFilesWithS3(newS3 func(context.Context, storage.
 	if err != nil {
 		return stop("workspace index", err, "Files are off: the workspace could not be started.")
 	}
-	f := files.New(ws, files.WithBlobs(blobs), files.WithMaxFileSize(a.studioUploadLimit()))
+	opts := []files.Option{files.WithBlobs(blobs), files.WithMaxFileSize(a.studioUploadLimit())}
+	if a.authDB != nil {
+		opts = append(opts, files.WithGroupsFor(func(principal string) []string {
+			var u auth.User
+			if err := a.authDB.Select("groups").First(&u, "id = ?", principal).Error; err != nil {
+				return nil
+			}
+			out := make([]string, 0, len(u.Groups))
+			for _, g := range u.Groups {
+				out = append(out, files.OIDCGroupPrincipal(g))
+			}
+			return out
+		}))
+	}
+	f := files.New(ws, opts...)
 	if err := f.EnsureShared(context.Background()); err != nil {
 		if closer != nil {
 			_ = closer.Close()

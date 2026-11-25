@@ -217,6 +217,7 @@ type RunCMD struct {
 	OIDCIssuer           string `env:"LOCALAI_OIDC_ISSUER" help:"OIDC issuer URL for auto-discovery" group:"auth"`
 	OIDCClientID         string `env:"LOCALAI_OIDC_CLIENT_ID" help:"OIDC Client ID (auto-enables auth)" group:"auth"`
 	OIDCClientSecret     string `env:"LOCALAI_OIDC_CLIENT_SECRET" help:"OIDC Client Secret" group:"auth"`
+	OIDCGroupsClaim      string `env:"LOCALAI_OIDC_GROUPS_CLAIM" default:"groups" help:"OIDC claim name containing group names" group:"auth"`
 	ExternalBaseURL      string `env:"LOCALAI_BASE_URL" help:"External base URL of this instance (e.g. https://localhost:8080). Used for OAuth callbacks and self-referential links (generated images/videos, job status). When unset, derived from X-Forwarded-Proto/Host or Forwarded headers." group:"api"`
 	AuthAdminEmail       string `env:"LOCALAI_ADMIN_EMAIL" help:"Email address to auto-promote to admin role" group:"auth"`
 	AuthRegistrationMode string `env:"LOCALAI_REGISTRATION_MODE" default:"open" help:"Registration mode: 'open' (default), 'approval', or 'invite' (invite code required)" group:"auth"`
@@ -838,6 +839,9 @@ func (r *RunCMD) Run(ctx *cliContext.Context) (result error) {
 			opts = append(opts, config.WithAuthOIDCIssuer(r.OIDCIssuer))
 			opts = append(opts, config.WithAuthOIDCClientID(r.OIDCClientID))
 			opts = append(opts, config.WithAuthOIDCClientSecret(r.OIDCClientSecret))
+			if r.OIDCGroupsClaim != "" {
+				opts = append(opts, config.WithAuthOIDCGroupsClaim(r.OIDCGroupsClaim))
+			}
 		}
 		if r.AuthAdminEmail != "" {
 			opts = append(opts, config.WithAuthAdminEmail(r.AuthAdminEmail))

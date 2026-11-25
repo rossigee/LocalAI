@@ -167,6 +167,15 @@ func (l ModelList) Value() (driver.Value, error) { return listValue(l) }
 // Scan implements sql.Scanner.
 func (l *ModelList) Scan(value any) error { return listScan((*[]string)(l), value) }
 
+// GroupList is a list of group names stored as JSON text.
+type GroupList []string
+
+// Value implements driver.Valuer.
+func (l GroupList) Value() (driver.Value, error) { return listValue(l) }
+
+// Scan implements sql.Scanner.
+func (l *GroupList) Scan(value any) error { return listScan((*[]string)(l), value) }
+
 func listValue(l []string) (driver.Value, error) {
 	if l == nil {
 		return "[]", nil

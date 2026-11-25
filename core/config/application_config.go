@@ -610,6 +610,7 @@ type AuthConfig struct {
 	OIDCIssuer          string // OIDC issuer URL for auto-discovery (e.g. https://accounts.google.com)
 	OIDCClientID        string
 	OIDCClientSecret    string
+	OIDCGroupsClaim     string // OIDC claim name containing group names (default: "groups")
 	AdminEmail          string // auto-promote to admin on login
 	RegistrationMode    string // "open", "approval" (default when empty), "invite"
 	DisableLocalAuth    bool   // disable local email/password registration and login
@@ -1514,6 +1515,12 @@ func WithAuthOIDCClientID(clientID string) AppOption {
 func WithAuthOIDCClientSecret(clientSecret string) AppOption {
 	return func(o *ApplicationConfig) {
 		o.Auth.OIDCClientSecret = clientSecret
+	}
+}
+
+func WithAuthOIDCGroupsClaim(claim string) AppOption {
+	return func(o *ApplicationConfig) {
+		o.Auth.OIDCGroupsClaim = claim
 	}
 }
 

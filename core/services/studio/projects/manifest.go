@@ -31,7 +31,7 @@ var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 // knownKeys are the top-level keys of Manifest, lower case. encoding/json
 // matches a key to a field without regard to case, so a differently cased copy
 // of one of these is the field, not an unknown key.
-var knownKeys = map[string]bool{"version": true, "id": true, "name": true, "description": true, "defaults": true, "attached": true, "sharedwith": true, "archived": true}
+var knownKeys = map[string]bool{"version": true, "id": true, "name": true, "description": true, "defaults": true, "attached": true, "access": true, "sharedwith": true, "archived": true}
 
 // ParseManifest reads a manifest and checks the rules of version 1. Unknown
 // top-level fields do not fail the parse so that older builds can read newer
@@ -91,6 +91,34 @@ func ParseManifest(b []byte) (Manifest, error) {
 			return Manifest{}, fmt.Errorf("%w: attached.%s has more than %d entries", ErrInvalid, l.field, maxListEntries)
 		}
 	}
+	if len(m.Access.Groups) > maxListEntries {
+		return Manifest{}, fmt.Errorf("%w: access.groups has more than %d entries", ErrInvalid, maxListEntries)
+	}
+	seenGroups := map[string]bool{}
+	cleanGroups := make([]AccessGrant, 0, len(m.Access.Groups))
+	for _, g := range m.Access.Groups {
+		g.Name = strings.TrimSpace(g.Name)
+		g.Mode = strings.ToLower(strings.TrimSpace(g.Mode))
+		if g.Name == "" {
+			return Manifest{}, fmt.Errorf("%w: access.groups.name is empty", ErrInvalid)
+		}
+		if strings.ContainsFunc(g.Name, unicode.IsControl) || len(g.Name) > maxEntryLen {
+			return Manifest{}, fmt.Errorf("%w: access.groups.name is invalid", ErrInvalid)
+		}
+		if g.Mode == "" {
+			g.Mode = "read"
+		}
+		if g.Mode != "read" && g.Mode != "write" {
+			return Manifest{}, fmt.Errorf("%w: access.groups.mode must be read or write", ErrInvalid)
+		}
+		k := strings.ToLower(g.Name)
+		if seenGroups[k] {
+			continue
+		}
+		seenGroups[k] = true
+		cleanGroups = append(cleanGroups, g)
+	}
+	m.Access.Groups = cleanGroups
 	return m, nil
 }
 

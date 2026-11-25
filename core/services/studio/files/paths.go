@@ -13,10 +13,18 @@ import (
 	"github.com/mudler/LocalAI/core/services/studio/workspace/workfiles"
 )
 
+// OIDCGroupPrincipal returns the workspace group principal for an OIDC group name.
+func OIDCGroupPrincipal(name string) string { return "oidc-group:" + name }
+
 // Actor returns the actor that acts for a user. Every user is in the
-// EveryoneGroup, so a grant to that group reaches them all.
+// EveryoneGroup, so a grant to that group reaches them all. External groups
+// (e.g. OIDC groups) are included when a groups resolver is configured.
 func (s *Service) Actor(principal string) workspace.Actor {
-	return UserActor(principal)
+	groups := []string{EveryoneGroup}
+	if s != nil && s.groupsFor != nil {
+		groups = append(groups, s.groupsFor(principal)...)
+	}
+	return workspace.Actor{Principal: principal, Groups: groups}
 }
 
 // UserActor is the actor of a user outside a chat: the principal in the

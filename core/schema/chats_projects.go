@@ -14,6 +14,17 @@ type ChatsProjectDefaults struct {
 	Collections []string `json:"collections,omitempty"`
 }
 
+// ChatsProjectAccessGrant gives an OIDC group access to the project.
+type ChatsProjectAccessGrant struct {
+	Name string `json:"name"`
+	Mode string `json:"mode,omitempty"` // read or write
+}
+
+// ChatsProjectAccess declares access grants for the project.
+type ChatsProjectAccess struct {
+	Groups []ChatsProjectAccessGrant `json:"groups,omitempty"`
+}
+
 // ChatsProject is one project of the caller.
 type ChatsProject struct {
 	ID          string `json:"id"`
@@ -35,6 +46,8 @@ type ChatsProject struct {
 	// outside a non-empty limit is refused on write. The list is empty while
 	// AttachedBlocked is true.
 	Attached ChatsProjectDefaults `json:"attached"`
+	// Access declares OIDC group access grants for the project.
+	Access ChatsProjectAccess `json:"access,omitempty"`
 	// AttachedBlocked is true when the project file holds an attached block
 	// that is ignored because another person may write the project folder (a
 	// share with write access). The skills of the project have the same rule
@@ -132,6 +145,7 @@ type ChatsProjectWrite struct {
 	Description *string               `json:"description,omitempty"`
 	Defaults    *ChatsProjectDefaults `json:"defaults,omitempty"`
 	Attached    *ChatsProjectDefaults `json:"attached,omitempty"`
+	Access      *ChatsProjectAccess   `json:"access,omitempty"`
 }
 
 // ChatsProjectList is the response of the project list endpoint.
