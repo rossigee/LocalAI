@@ -131,6 +131,22 @@ func defaultsIn(d schema.ChatsProjectDefaults) projects.Defaults {
 	return projects.Defaults{Skills: d.Skills, Addons: d.Addons, Connectors: d.Connectors, MCPServers: d.MCPServers, Collections: d.Collections}
 }
 
+func projectAccessOut(a projects.Access) schema.ChatsProjectAccess {
+	out := schema.ChatsProjectAccess{Groups: make([]schema.ChatsProjectAccessGrant, 0, len(a.Groups))}
+	for _, g := range a.Groups {
+		out.Groups = append(out.Groups, schema.ChatsProjectAccessGrant{Name: g.Name, Mode: g.Mode})
+	}
+	return out
+}
+
+func projectAccessIn(a schema.ChatsProjectAccess) projects.Access {
+	out := projects.Access{Groups: make([]projects.AccessGrant, 0, len(a.Groups))}
+	for _, g := range a.Groups {
+		out.Groups = append(out.Groups, projects.AccessGrant{Name: g.Name, Mode: g.Mode})
+	}
+	return out
+}
+
 // projectOut describes one project. The description and the defaults come from
 // the manifest, so a project that cannot be read is listed without them and
 // with the status the index holds. ChatCount counts up to projectChatCountCap.
@@ -141,6 +157,7 @@ func (h *Handlers) projectOut(ctx context.Context, host *projects.Service, user 
 		out.Description = r.Manifest.Description
 		out.Defaults = defaultsOut(r.Manifest.Defaults)
 		out.Attached = defaultsOut(r.Manifest.Attached)
+		out.Access = projectAccessOut(r.Manifest.Access)
 		out.AttachedBlocked = r.AttachedBlocked
 	} else {
 		xlog.Debug("studio: project manifest not read for the list", "project", p.ID, "error", err)
@@ -217,6 +234,9 @@ func (h *Handlers) CreateProject(c echo.Context) error {
 	if req.Attached != nil {
 		in.Attached = defaultsIn(*req.Attached)
 	}
+	if req.Access != nil {
+		in.Access = projectAccessIn(*req.Access)
+	}
 	user, ok := h.projectOwner(c)
 	if !ok {
 		return nil
@@ -287,6 +307,10 @@ func (h *Handlers) UpdateProject(c echo.Context) error {
 	if req.Attached != nil {
 		a := defaultsIn(*req.Attached)
 		in.Attached = &a
+	}
+	if req.Access != nil {
+		a := projectAccessIn(*req.Access)
+		in.Access = &a
 	}
 	user, ok := h.projectOwner(c)
 	if !ok {

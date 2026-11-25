@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ type providerEntry struct {
 	oidcVerifier *oidc.IDTokenVerifier // nil for GitHub (API-based user info)
 	name         string
 	userInfoURL  string // only used for GitHub
+	groupsClaim  string // OIDC claim name for groups; empty = don't read groups
 }
 
 // oauthUserInfo is a provider-agnostic representation of an authenticated user.
@@ -62,6 +64,7 @@ type oauthUserInfo struct {
 	EmailVerified bool
 	Name          string
 	AvatarURL     string
+	Groups        []string
 }
 
 // OAuthManager manages multiple OAuth/OIDC providers.
@@ -76,6 +79,7 @@ type OAuthParams struct {
 	OIDCIssuer         string
 	OIDCClientID       string
 	OIDCClientSecret   string
+	OIDCGroupsClaim    string
 }
 
 // NewOAuthManager creates an OAuthManager from the given params.
@@ -110,6 +114,10 @@ func NewOAuthManager(baseURL string, params OAuthParams) (*OAuthManager, error) 
 			SupportedSigningAlgs: oidcSupportedSigningAlgs,
 		})
 
+		groupsClaim := params.OIDCGroupsClaim
+		if groupsClaim == "" {
+			groupsClaim = "groups"
+		}
 		m.providers[ProviderOIDC] = &providerEntry{
 			name: ProviderOIDC,
 			oauth2Config: oauth2.Config{
@@ -120,6 +128,7 @@ func NewOAuthManager(baseURL string, params OAuthParams) (*OAuthManager, error) 
 				Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 			},
 			oidcVerifier: verifier,
+			groupsClaim:  groupsClaim,
 		}
 	}
 
@@ -220,7 +229,7 @@ func (m *OAuthManager) CallbackHandler(providerName string, db *gorm.DB, adminEm
 		// Fetch user info — branch based on provider type
 		var userInfo *oauthUserInfo
 		if provider.oidcVerifier != nil {
-			userInfo, err = extractOIDCUserInfo(ctx, provider.oidcVerifier, token)
+			userInfo, err = extractOIDCUserInfo(ctx, provider.oidcVerifier, token, provider.groupsClaim)
 		} else {
 			userInfo, err = fetchGitHubUserInfoAsOAuth(ctx, token.AccessToken)
 		}
@@ -259,6 +268,9 @@ func (m *OAuthManager) CallbackHandler(providerName string, db *gorm.DB, adminEm
 			existingUser.AvatarURL = userInfo.AvatarURL
 			if userInfo.Email != "" {
 				existingUser.Email = strings.ToLower(strings.TrimSpace(userInfo.Email))
+			}
+			if provider.oidcVerifier != nil {
+				existingUser.Groups = GroupList(userInfo.Groups)
 			}
 			db.Save(&existingUser)
 			user = &existingUser
@@ -305,6 +317,7 @@ func (m *OAuthManager) CallbackHandler(providerName string, db *gorm.DB, adminEm
 					Subject:   userInfo.Subject,
 					Role:      role,
 					Status:    status,
+					Groups:    GroupList(userInfo.Groups),
 				}
 				if err := tx.Create(&newUser).Error; err != nil {
 					return fmt.Errorf("failed to create user: %w", err)
@@ -352,7 +365,7 @@ func (m *OAuthManager) CallbackHandler(providerName string, db *gorm.DB, adminEm
 }
 
 // extractOIDCUserInfo extracts user info from the OIDC ID token.
-func extractOIDCUserInfo(ctx context.Context, verifier *oidc.IDTokenVerifier, token *oauth2.Token) (*oauthUserInfo, error) {
+func extractOIDCUserInfo(ctx context.Context, verifier *oidc.IDTokenVerifier, token *oauth2.Token, groupsClaim string) (*oauthUserInfo, error) {
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || rawIDToken == "" {
 		return nil, fmt.Errorf("no id_token in token response")
@@ -378,13 +391,55 @@ func extractOIDCUserInfo(ctx context.Context, verifier *oidc.IDTokenVerifier, to
 	// not asserting verification, and we must not promote on its email.
 	verified := claims.EmailVerified != nil && *claims.EmailVerified
 
-	return &oauthUserInfo{
+	info := &oauthUserInfo{
 		Subject:       claims.Sub,
 		Email:         claims.Email,
 		EmailVerified: verified,
 		Name:          claims.Name,
 		AvatarURL:     claims.Picture,
-	}, nil
+	}
+	if groupsClaim != "" {
+		var raw map[string]any
+		if err := idToken.Claims(&raw); err == nil {
+			info.Groups = normalizeOIDCGroups(raw[groupsClaim])
+		}
+	}
+	return info, nil
+}
+
+func normalizeOIDCGroups(v any) []string {
+	var items []string
+	switch g := v.(type) {
+	case []string:
+		items = g
+	case []any:
+		for _, it := range g {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+	case string:
+		if g != "" {
+			items = []string{g}
+		}
+	default:
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		it = strings.TrimSpace(it)
+		if it == "" || seen[it] {
+			continue
+		}
+		seen[it] = true
+		out = append(out, it)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	slices.Sort(out)
+	return out
 }
 
 type githubUserInfo struct {

@@ -33,6 +33,10 @@ type User struct {
 	// the minute-scale of LastActiveThrottle. Only admins can read it. Nil
 	// means no activity was recorded yet.
 	LastActiveAt *time.Time `gorm:"index"`
+	// Groups holds group names from the identity provider (e.g. OIDC groups
+	// claim). They are refreshed on login and mapped to workspace group
+	// principals for authorization.
+	Groups GroupList `gorm:"type:text"`
 }
 
 // Session represents a user login session.

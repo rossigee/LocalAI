@@ -348,6 +348,7 @@ func RegisterAuthRoutes(e *echo.Echo, app *application.Application) {
 				OIDCIssuer:         appConfig.Auth.OIDCIssuer,
 				OIDCClientID:       appConfig.Auth.OIDCClientID,
 				OIDCClientSecret:   appConfig.Auth.OIDCClientSecret,
+				OIDCGroupsClaim:    appConfig.Auth.OIDCGroupsClaim,
 			},
 		)
 		if err == nil {
