@@ -239,6 +239,9 @@ var _ = Describe("BitTorrent downloads", func() {
 			cfg.ListenPort = 0
 			cfg.NoDHT, cfg.DisableTrackers, cfg.NoDefaultPortForwarding = true, true, true
 			cfg.DisableIPv6 = true
+			// This peer only needs TCP. Windows refuses a second UDP bind on the
+			// dynamic port when uTP and DHT are also enabled.
+			cfg.DisableUTP = true
 			cfg.Seed = true
 			cfg.DefaultStorage = storage.NewFileOpts(storage.NewFileClientOpts{
 				ClientBaseDir:   tor.Root,
