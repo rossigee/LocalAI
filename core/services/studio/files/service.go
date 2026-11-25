@@ -48,6 +48,11 @@ type Service struct {
 	// index holds the text of the documents, for search and read_file. Nil:
 	// documents are found by name only.
 	index *textindex.Indexer
+
+	// groupsFor returns the authorization group principals for a user (e.g.
+	// oidc-group:scratchmail). Nil means no external groups. @everyone is
+	// always added by Actor.
+	groupsFor func(string) []string
 }
 
 // SetTextIndex gives the service the text index of the documents. Call it
@@ -98,6 +103,13 @@ func (s *Service) purged(ctx context.Context, prefix string) {
 // WithMaxFileSize records the largest file an upload may send, so a client
 // can refuse a larger file before it sends any byte.
 func WithMaxFileSize(n int64) Option { return func(s *Service) { s.maxFileSize = n } }
+
+// WithGroupsFor sets a resolver that returns authorization group principals
+// for a user. It is called when building an Actor; return group principal
+// strings such as "oidc-group:scratchmail".
+func WithGroupsFor(fn func(string) []string) Option {
+	return func(s *Service) { s.groupsFor = fn }
+}
 
 // MaxFileSize is the largest file an upload may send, in bytes, or 0 when the
 // server sets no limit.

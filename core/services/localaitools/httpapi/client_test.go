@@ -14,6 +14,8 @@ import (
 
 	"github.com/mudler/LocalAI/core/schema"
 	localaitools "github.com/mudler/LocalAI/core/services/localaitools"
+	"github.com/mudler/LocalAI/core/services/upgraderun"
+	"github.com/mudler/LocalAI/pkg/enginesettings"
 )
 
 // fakeLocalAI is a minimal HTTP server that mimics the relevant LocalAI
@@ -161,6 +163,56 @@ var _ = Describe("httpapi.Client against the LocalAI admin REST surface", func()
 			Expect(hits).To(HaveLen(1))
 			Expect(hits[0].Name).To(Equal("qwen2.5-7b-instruct"))
 			Expect(containsTagExact(hits[0].Tags, "chat")).To(BeTrue())
+		})
+	})
+
+	Describe("a single upgrade that an upgrade run did not start in time", func() {
+		It("answers with the run, never a job, for a backend and a model", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_, _ = w.Write([]byte(`{"code":"pending","message":"waits","run_id":"run-7","run":{"id":"run-7"}}`))
+			}))
+			defer srv.Close()
+			cl := New(srv.URL, "")
+			job, err := cl.UpgradeBackend(ctx, "kokoro")
+			Expect(job).To(BeEmpty())
+			var pending *upgraderun.PendingError
+			Expect(errors.As(err, &pending)).To(BeTrue(), "%v", err)
+			Expect(pending.RunID).To(Equal("run-7"))
+			job, err = cl.UpgradeModel(ctx, "tiny", false, nil)
+			Expect(job).To(BeEmpty())
+			Expect(errors.As(err, &pending)).To(BeTrue(), "%v", err)
+		})
+	})
+
+	Describe("engine settings", func() {
+		It("posts the command and decodes the parse result", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				Expect(r.URL.Path).To(Equal("/api/engines/llama-cpp/parse-command"))
+				var body map[string]string
+				Expect(json.NewDecoder(r.Body).Decode(&body)).To(Succeed())
+				Expect(body["command"]).To(Equal("llama-server -c 4096"))
+				_, _ = w.Write([]byte(`{"fields":{"context_size":4096},"options":[],"unmapped":[],"warnings":[],"placements":[]}`))
+			}))
+			defer srv.Close()
+			out, err := New(srv.URL, "").ParseEngineCommand(ctx, "llama-cpp", "llama-server -c 4096")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Fields["context_size"]).To(BeEquivalentTo(4096))
+		})
+
+		It("posts the config and decodes the command", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				Expect(r.URL.Path).To(Equal("/api/engines/llama-cpp/command-preview"))
+				var body map[string]map[string]any
+				Expect(json.NewDecoder(r.Body).Decode(&body)).To(Succeed())
+				Expect(body["config"]["context_size"]).To(BeEquivalentTo(4096))
+				_, _ = w.Write([]byte(`{"command":"llama-server -c 4096","warnings":[]}`))
+			}))
+			defer srv.Close()
+			out, err := New(srv.URL, "").PreviewEngineCommand(ctx, "llama-cpp", enginesettings.Config{"context_size": 4096})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Command).To(Equal("llama-server -c 4096"))
 		})
 	})
 

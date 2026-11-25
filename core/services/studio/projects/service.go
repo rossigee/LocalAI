@@ -69,6 +69,7 @@ type CreateInput struct {
 	Name, Description string
 	Defaults          Defaults
 	Attached          Defaults
+	Access            Access
 }
 
 // UpdateInput changes a project. A nil field stays as it is.
@@ -76,6 +77,7 @@ type UpdateInput struct {
 	Name, Description *string
 	Defaults          *Defaults
 	Attached          *Defaults
+	Access            *Access
 }
 
 // Resolved is a project with its manifest and where its folders are now.
@@ -134,7 +136,7 @@ func (s *Service) Create(ctx context.Context, owner string, in CreateInput) (Pro
 	if err := s.permit(ctx, owner); err != nil {
 		return Project{}, err
 	}
-	m := Manifest{Version: ManifestVersion, ID: NewID(), Name: strings.TrimSpace(in.Name), Description: strings.TrimSpace(in.Description), Defaults: in.Defaults, Attached: in.Attached}
+	m := Manifest{Version: ManifestVersion, ID: NewID(), Name: strings.TrimSpace(in.Name), Description: strings.TrimSpace(in.Description), Defaults: in.Defaults, Attached: in.Attached, Access: in.Access}
 	if _, err := ParseManifest(m.Marshal()); err != nil {
 		return Project{}, err
 	}
@@ -189,6 +191,9 @@ func (s *Service) Create(ctx context.Context, owner string, in CreateInput) (Pro
 			if errors.Is(err, ErrNameTaken) {
 				continue // a concurrent request took the slug in the index
 			}
+			return Project{}, err
+		}
+		if err := s.reconcileAccess(ctx, owner, slug, m.Access); err != nil {
 			return Project{}, err
 		}
 		return p, nil
@@ -380,6 +385,9 @@ func (s *Service) Update(ctx context.Context, owner, id string, in UpdateInput) 
 		if in.Attached != nil {
 			m.Attached = *in.Attached
 		}
+		if in.Access != nil {
+			m.Access = *in.Access
+		}
 		if in.Defaults != nil || in.Attached != nil {
 			// A narrower limit is refused too when an attached tool would fall outside it.
 			return CheckAttached(m.Defaults, m.Attached)
@@ -484,6 +492,9 @@ func (s *Service) save(ctx context.Context, owner string, r Resolved, rel, want 
 	if err := s.o.Store.Put(ctx, p); err != nil {
 		return Project{}, err
 	}
+	if err := s.reconcileAccess(ctx, owner, p.Slug, m.Access); err != nil {
+		return Project{}, err
+	}
 	return p, nil
 }
 
@@ -492,6 +503,51 @@ func statusOf(m Manifest) Status {
 		return StatusArchived
 	}
 	return StatusActive
+}
+
+const oidcGroupPrincipalPrefix = "oidc-group:"
+
+func (s *Service) reconcileAccess(ctx context.Context, owner, slug string, access Access) error {
+	abs, err := s.o.Files.Abs(owner, s.rootRel()+"/"+slug)
+	if err != nil {
+		return err
+	}
+	admin := workspace.Actor{Principal: workspace.StudioAdmin}
+	st := s.o.Files.Store()
+	gl, ok := st.(workspace.GrantLister)
+	if !ok {
+		return nil
+	}
+	existing, err := gl.Grants(ctx, admin, abs)
+	if err != nil {
+		return err
+	}
+	want := map[string]workspace.Mode{}
+	for _, g := range access.Groups {
+		principal := oidcGroupPrincipalPrefix + g.Name
+		mode := workspace.ModeRead
+		if g.Mode == "write" {
+			mode = workspace.ModeWrite
+		}
+		want[principal] = mode
+	}
+	for _, g := range existing {
+		if !strings.HasPrefix(g.Principal, oidcGroupPrincipalPrefix) {
+			continue
+		}
+		if _, ok := want[g.Principal]; ok {
+			continue
+		}
+		if err := st.Revoke(ctx, admin, g.Principal, abs); err != nil {
+			return err
+		}
+	}
+	for principal, mode := range want {
+		if err := st.Grant(ctx, admin, principal, abs, mode); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Delete moves the folder of a project to the Trash and removes its row. Chats
