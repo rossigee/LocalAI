@@ -1,5 +1,5 @@
 import { test, expect } from './coverage-fixtures.js'
-import { mockChat } from './chat-fixtures.js'
+import { mockChat, openActivityFolds } from './chat-fixtures.js'
 
 // A long turn that fails part way: the card stands after the kept transcript,
 // and Retry goes on from there. The chats API is stubbed with a small state
@@ -64,6 +64,7 @@ test.describe('Retry of a failed turn', () => {
     const api = stubChat(page)
     await api.install()
     await page.goto('/app/chats/c1')
+    await openActivityFolds(page)
 
     // Read from the server after a plain load: no live event was seen.
     await expect(page.getByText('The sales file has 240 rows. Now the costs.')).toBeVisible()
@@ -97,6 +98,7 @@ test.describe('Retry of a failed turn', () => {
 
     await expect(page.getByText('The report is ready: revenue is up 12 percent.')).toBeVisible()
     await expect(page.getByTestId('chat-error')).toHaveCount(0)
+    await openActivityFolds(page)
     // Everything the failed turn did is still on the page, once.
     await expect(page.getByText('I will read the three source files first.')).toHaveCount(1)
     await expect(page.getByText('The sales file has 240 rows. Now the costs.')).toHaveCount(1)

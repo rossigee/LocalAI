@@ -1,5 +1,6 @@
 import { test, expect } from './coverage-fixtures.js'
 import { composer, transcript, startChat, watchProblems, b64, offerMockModel } from './journey-fixtures.js'
+import { openActivityFolds } from './chat-fixtures.js'
 
 // Chat journeys against the real test server: the browser, the chats API, the
 // conversation service, the agent loop and the mock inference backend. Nothing
@@ -84,11 +85,12 @@ test.describe('Chat journeys', () => {
     const args = b64({ path: '/' })
     await startChat(page, `list my files ADDON_TOOL_CALL:list_files:${args}`)
     // The tool line, not the tool's name: the user's own message names
-    // list_files too, and so does the model's call once it streams, so a text
-    // match passes before any tool ran or fails on two matches.
-    const line = transcript(page).getByTestId('chat-activity').filter({ hasText: 'Listed /' })
-    await expect(line.first()).toBeVisible({ timeout: 20_000 })
+    // list_files too. A stored turn starts folded, so wait for the turn to end
+    // and open the fold before checking the line.
+    const line = transcript(page).getByRole('button', { name: /^Listed \// }).first()
     await expect(working(page)).toBeHidden({ timeout: 20_000 })
+    await openActivityFolds(page, transcript(page))
+    await expect(line).toBeVisible({ timeout: 20_000 })
   })
 
   test('a file the model writes lands in Files, in the history, and Undo removes it', async ({ page }) => {
