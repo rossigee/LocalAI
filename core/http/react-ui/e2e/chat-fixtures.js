@@ -40,6 +40,18 @@ export async function answerWith(page, text) {
   return { request: () => body }
 }
 
+// A turn's tool calls and the model words before them live in a folded activity
+// note, and a stored turn starts folded. Open every fold before checking what
+// the turn contains.
+export async function openActivityFolds(page, root = page) {
+  const folds = root.getByTestId('chat-activity')
+  await folds.first().waitFor()
+  for (let i = 0; i < await folds.count(); i++) {
+    const head = folds.nth(i).locator('button[aria-expanded="false"]').first()
+    if (await head.count()) await head.click()
+  }
+}
+
 // The Talk page's WebRTC, faked: the page connects as it would, and the spec
 // plays the server's events with window.__talk.emit(event).
 export async function fakeRealtime(page, { pipelines = true, micError = null } = {}) {

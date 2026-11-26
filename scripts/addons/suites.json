@@ -1352,7 +1352,8 @@
       "a library signed for the pinned repository",
       "a library signed for another repository",
       "a library signed with no repository in the certificate",
-      "an identity pattern with a source repository"
+      "an identity pattern with a source repository",
+      "names the field the index refused, so the cause is not only a generic refusal"
     ],
     "report": ".cache/addons/logs/catalog.json"
   },

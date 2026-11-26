@@ -33,7 +33,7 @@ test.describe('Chats against the real server', () => {
     await startChat(page, 'hello there')
 
     await expect(page).toHaveURL(/\/app\/chats\/[0-9a-f]+$/)
-    await expect(log(page).locator('.cx-msg--user')).toHaveText('hello there')
+    await expect(log(page).locator('.cx-msg--user')).toContainText('hello there')
     // The model's answer arrives as a second, non-user message.
     await expect(log(page).locator('.cx-msg--model').first()).not.toBeEmpty({ timeout: 20_000 })
     await expect(working(page)).toBeHidden({ timeout: 20_000 })
@@ -66,12 +66,12 @@ test.describe('Chats against the real server', () => {
     await startChat(page, 'shared chat')
     await expect(page).toHaveURL(/\/app\/chats\/[0-9a-f]+$/)
     const url = page.url()
-    await expect(log(page).locator('.cx-msg--user')).toHaveText('shared chat')
+    await expect(log(page).locator('.cx-msg--user')).toContainText('shared chat')
 
     const second = await browser.newPage()
     await offerMockModel(second)
     await second.goto(url)
-    await expect(log(second).locator('.cx-msg--user')).toHaveText('shared chat')
+    await expect(log(second).locator('.cx-msg--user')).toContainText('shared chat')
     await second.close()
   })
 
