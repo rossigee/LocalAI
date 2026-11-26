@@ -62,6 +62,20 @@ async function shot(page, name) {
 }
 const card = page => page.getByTestId('chat-error')
 
+// A stored model message that came before a tool call is kept as a note in the
+// turn's activity, and a stored turn starts folded. Open the fold before
+// checking the words the model wrote before it was interrupted.
+async function openStoredTurn(page) {
+  const folds = page.getByTestId('chat-activity')
+  await folds.first().waitFor()
+  for (let i = 0; i < await folds.count(); i++) {
+    const fold = folds.nth(i)
+    if (await fold.locator('button[aria-expanded="false"]').count() > 0) {
+      await fold.getByRole('button').click()
+    }
+  }
+}
+
 test.describe('Interrupted turn', () => {
   test.beforeEach(async ({ page }) => {
     await mockChat(page)
@@ -72,6 +86,7 @@ test.describe('Interrupted turn', () => {
     const api = stubChat(page)
     await api.install()
     await page.goto('/app/chats/c1')
+    await openStoredTurn(page)
     await expect(page.getByText('I will read the three source files first.')).toBeVisible()
     await expect(card(page)).toHaveAttribute('data-code', 'interrupted')
     await expect(card(page)).toHaveAttribute('data-phase', 'waiting')
@@ -97,10 +112,12 @@ test.describe('Interrupted turn', () => {
     const api = stubChat(page)
     await api.install()
     await page.goto('/app/chats/c1')
+    await openStoredTurn(page)
     await expect(card(page)).toHaveAttribute('data-phase', 'waiting')
     await freezeClock(page)
     await page.clock.fastForward(3500)
     await expect(page.getByText(FINISHED)).toBeVisible()
+    await openStoredTurn(page)
     await expect(page.getByText('I will read the three source files first.')).toHaveCount(1)
     await expect(card(page)).toHaveCount(0)
     expect(api.state.calls).toEqual(['resume'])
@@ -132,6 +149,7 @@ test.describe('Interrupted turn', () => {
     const api = stubChat(page, { willResume: true, tried: 1 })
     await api.install()
     await page.goto('/app/chats/c1')
+    await openStoredTurn(page)
     await expect(page.getByText('I will read the three source files first.')).toBeVisible()
     await expect(card(page)).toHaveAttribute('data-phase', 'server')
     await expect(page.getByTestId('chat-error-resume')).toHaveText('The server is going on from where it stopped.')
@@ -167,6 +185,7 @@ test.describe('Interrupted turn', () => {
     const api = stubChat(page, { last: 'failed' })
     await api.install()
     await page.goto('/app/chats/c1')
+    await openStoredTurn(page)
     await expect(page.getByText('I will read the three source files first.')).toBeVisible()
     await page.clock.fastForward(60_000)
     expect(api.state.calls).toEqual([])
@@ -176,6 +195,7 @@ test.describe('Interrupted turn', () => {
     const api = stubChat(page, { last: 'done' })
     await api.install()
     await page.goto('/app/chats/c1')
+    await openStoredTurn(page)
     await expect(page.getByText('I will read the three source files first.')).toBeVisible()
     await expect(page.getByTestId('chat-reconnecting')).toHaveCount(0)
     await page.clock.fastForward(2500)
