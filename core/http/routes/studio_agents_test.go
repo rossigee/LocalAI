@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -70,6 +71,58 @@ var _ = Describe("Chats agents endpoints", func() {
 		Expect(s.do("bob", http.MethodDelete, "/api/chats/agents/"+id, nil).Code).To(Equal(http.StatusNotFound))
 		Expect(decodeJSON(s.do("bob", http.MethodGet, "/api/chats/agents", nil))["agents"]).To(BeEmpty())
 		Expect(s.do("alice", http.MethodGet, "/api/chats/agents/"+id, nil).Code).To(Equal(http.StatusOK))
+	})
+
+	It("lets an administrator manage another user's agents", func() {
+		rec := s.do("root", http.MethodPost, "/api/chats/agents?user_id=alice", map[string]any{"name": "Reviewer", "model": "test-model"})
+		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+		a := decodeJSON(rec)
+		Expect(a).To(HaveKeyWithValue("owner", "alice"))
+		id := a["id"].(string)
+
+		list := decodeJSON(s.do("root", http.MethodGet, "/api/chats/agents?user_id=alice", nil))
+		Expect(list["agents"]).To(HaveLen(1))
+		Expect(list["agents"].([]any)[0]).To(HaveKeyWithValue("owner", "alice"))
+
+		got := s.do("root", http.MethodGet, "/api/chats/agents/"+id+"?user_id=alice", nil)
+		Expect(got.Code).To(Equal(http.StatusOK), got.Body.String())
+		Expect(decodeJSON(got)).To(HaveKeyWithValue("owner", "alice"))
+
+		put := s.do("root", http.MethodPut, "/api/chats/agents/"+id+"?user_id=alice", map[string]any{"name": "Reviewer 2"})
+		Expect(put.Code).To(Equal(http.StatusOK), put.Body.String())
+		Expect(decodeJSON(put)).To(HaveKeyWithValue("owner", "alice"))
+
+		mine := decodeJSON(s.do("alice", http.MethodGet, "/api/chats/agents", nil))
+		Expect(mine["agents"]).To(HaveLen(1))
+		Expect(mine["agents"].([]any)[0]).To(HaveKeyWithValue("name", "Reviewer 2"))
+
+		Expect(s.do("root", http.MethodDelete, "/api/chats/agents/"+id+"?user_id=alice", nil).Code).To(Equal(http.StatusNoContent))
+		Expect(decodeJSON(s.do("alice", http.MethodGet, "/api/chats/agents", nil))["agents"]).To(BeEmpty())
+	})
+
+	Context("when a user_id is named", func() {
+		var id string
+		BeforeEach(func() { id = save("alice", "Mine")["id"].(string) })
+		target := func(path, owner string) string { return strings.ReplaceAll(path, "{id}", id) + "?user_id=" + owner }
+
+		DescribeTable("agent routes accept an administrator's user_id only",
+			func(method, path string, body any, want int, ownerToo bool) {
+				Expect(s.do("bob", method, target(path, "alice"), body).Code).To(Equal(http.StatusForbidden))
+				Expect(s.do("bob", method, target(path, "nobody"), body).Code).To(Equal(http.StatusForbidden))
+				Expect(s.do("root", method, target(path, "nobody"), body).Code).To(Equal(http.StatusNotFound))
+				for _, bad := range []string{"..", "a/b", strings.Repeat("a", 37)} {
+					Expect(s.do("root", method, target(path, bad), body).Code).To(Equal(http.StatusBadRequest), "user_id %q", bad)
+				}
+				Expect(s.do("root", method, target(path, "alice"), body).Code).To(Equal(want))
+				if ownerToo {
+					Expect(s.do("alice", method, target(path, "alice"), body).Code).To(Equal(want))
+				}
+			},
+			Entry("list", http.MethodGet, "/api/chats/agents", nil, http.StatusOK, true),
+			Entry("read", http.MethodGet, "/api/chats/agents/{id}", nil, http.StatusOK, true),
+			Entry("update", http.MethodPut, "/api/chats/agents/{id}", map[string]any{"name": "Renamed"}, http.StatusOK, true),
+			Entry("delete", http.MethodDelete, "/api/chats/agents/{id}", nil, http.StatusNoContent, false),
+		)
 	})
 
 	It("refuses a bad definition with the reason", func() {
