@@ -72,6 +72,18 @@ var _ = Describe("Chats agent export, import, templates and history", func() {
 		Expect(decodeJSON(s.do("bob", http.MethodGet, "/api/chats/agents", nil))["agents"]).To(HaveLen(1))
 	})
 
+	It("exports and imports an agent on behalf of another user", func() {
+		id := save("alice")
+		exp := s.do("root", http.MethodGet, "/api/chats/agents/"+id+"/export?user_id=alice", nil)
+		Expect(exp.Code).To(Equal(http.StatusOK), exp.Body.String())
+		file := decodeJSON(exp)
+
+		imp := s.do("root", http.MethodPost, "/api/chats/agents/import?user_id=alice", file)
+		Expect(imp.Code).To(Equal(http.StatusCreated), imp.Body.String())
+		Expect(decodeJSON(imp)["agent"]).To(HaveKeyWithValue("owner", "alice"))
+		Expect(s.do("bob", http.MethodGet, "/api/chats/agents/"+id+"/export?user_id=alice", nil).Code).To(Equal(http.StatusForbidden))
+	})
+
 	Describe("builtin grants", func() {
 		It("lists the declared grants with their sensitivity", func() {
 			rec := s.do("alice", http.MethodGet, "/api/chats/agents/builtin-grants", nil)

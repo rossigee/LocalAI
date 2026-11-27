@@ -117,6 +117,16 @@ Agents need the `agents` feature, which is off by default for a user (see
 [Chats permissions]({{% relref "/administration/chats-deployment#permissions" %}})). They have no administration
 tools, as they are your own settings.
 
+An administrator can add `?user_id=<user id>` to the agent routes (`GET` and
+`POST /api/chats/agents`, `GET`, `PUT` and `DELETE /api/chats/agents/{id}`,
+`GET /api/chats/agents/{id}/export` and `POST /api/chats/agents/import`) to act
+on that person's agents. A user who names someone else gets `403`; an
+administrator gets `404` for an unknown user id and `400` for an id that is not
+letters, digits, `-` or `_` (at most 36 characters). Agent responses carry
+`owner`, the id of the person who owns the agent. Every impersonated request is
+logged. As with [View as]({{% relref "/administration/view-as" %}}), the
+parameter is a convenience, not a server-side read-only guarantee.
+
 ### Memory of an agent
 
 The optional field `memory` chooses the notes of an agent: `mine_and_own` (reads your notes
