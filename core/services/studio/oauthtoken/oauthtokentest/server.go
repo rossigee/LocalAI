@@ -142,6 +142,17 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-gate:
 		case <-r.Context().Done():
+			// Returning normally would let net/http send an implicit 200 with
+			// an empty body, which the client reads as a bad response rather
+			// than the timeout this gate simulates. Close the connection so
+			// the client sees a network failure.
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					_ = conn.Close()
+					return
+				}
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 	}
